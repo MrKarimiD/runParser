@@ -5,6 +5,8 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QDebug>
+#include <QThread>
+#include "fileparser.h"
 
 namespace Ui {
 class MainWindow;
@@ -25,10 +27,20 @@ private slots:
 
     void on_clear_button_clicked();
 
+    void progressResult_slot(const QString &status, const int &progress);
+    void processResult_slot(const QString &status, const int &progress);
+    void onFinished();
+
 private:
     Ui::MainWindow *ui;
-    QList<QString> files;
-    int problemSize;
+    fileParser *parser;
+    QThread workerThread;
+
+    void disableButtons();
+
+signals:
+    void fetchCommand(const QString &status);
+    void processCommand();
 };
 
 #endif // MAINWINDOW_H

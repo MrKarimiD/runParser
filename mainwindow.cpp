@@ -6,6 +6,15 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    parser = new fileParser();
+    parser->moveToThread(&workerThread);
+    workerThread.start();
+    connect(parser, SIGNAL(progressResult(QString,int)), this, SLOT(progressResult_slot(QString,int)));
+    connect(parser, SIGNAL(processingResult(QString,int)), this, SLOT(processResult_slot(QString,int)));
+    connect(parser, SIGNAL(fetching_finished()), this, SLOT(onFinished()));
+    connect(parser, SIGNAL(processing_finished()), this, SLOT(onFinished()));
+    connect(this, SIGNAL(fetchCommand(QString)), parser, SLOT(sepratingFiles(QString)));
+    connect(this, SIGNAL(processCommand()), parser, SLOT(processingFiles()));
 }
 
 MainWindow::~MainWindow()
@@ -15,100 +24,50 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_addr_button_clicked()
 {
-    QString fileAddress = QFileDialog::getOpenFileName(this,tr("Select Your run File"), "/home", tr("Text Files (*.runs)"));
-    ui->selected_textEdit->append(fileAddress);
-    files.append(fileAddress);
+    QString dir = QFileDialog::getExistingDirectory(this, tr("Open Directory"),
+                                                    "C:\\Users\\Mohammad Reza\\Desktop",
+                                                    QFileDialog::ShowDirsOnly
+                                                    | QFileDialog::DontResolveSymlinks);
+    disableButtons();
+    emit fetchCommand(dir);
 }
 
 void MainWindow::on_process_button_clicked()
 {
-   // srand (time(NULL));
-    ui->log_textEdit->append("Processing Starts...");
-    for(int i = 0; i < files.size(); i++)
-    {
-        QStringList list1 = files.at(i).split("/");
-        QString tmp = "File '";
-        tmp.append(list1.last());
-        tmp.append("' is processing...");
-        ui->log_textEdit->append(tmp);
-
-        QFile file(files.at(i));
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        {
-            QString errorText = "File '";
-            errorText.append(list1.last());
-            errorText.append("' is not available");
-            ui->log_textEdit->append(errorText);
-            continue;
-        }
-
-        QTextStream in(&file);
-        QString data = in.readAll();
-        QStringList textParts = data.split("------------------------------------------------------------------\n");
-        QStringList coincidenceMatrix = textParts.last().split("\n\n");
-
-        QStringList alphabets;
-        alphabets<<"A"<<"B"<<"C"<<"D"<<"E"<<"F"<<"G"<<"H"<<"I"<<"J";
-
-        QString outputName;
-        QStringList outputNameLists = list1.last().split("-");
-        for(int n = 0; n < outputNameLists.size(); n++)
-        {
-            outputName.append(outputNameLists.at(n));
-            if( n != outputNameLists.size()-1 ) outputName.append("_");
-        }
-        outputName.remove(".runs");
-        outputName.append(".m");
-
-        QFile output_file(outputName);
-        if (!output_file.open(QIODevice::WriteOnly | QIODevice::Text))
-        {
-            QString errorText = "File '";
-            errorText.append(outputName);
-            errorText.append("' cannot be created");
-            ui->log_textEdit->append(errorText);
-            continue;
-        }
-
-        QTextStream out(&output_file);
-        out << "clc\n";
-        out << "clear all\n\n";
-        //out <<"close all\n\n";
-
-        for(int j = 1; j < coincidenceMatrix.size(); j++)
-        {
-            out <<alphabets.at(j-1)<<"=[";
-            QStringList lines = coincidenceMatrix.at(j).split("\n");
-            if( j == 1) problemSize = lines.size() - 1;
-            for(int k = 1; k < lines.size(); k++)
-            {
-                out<< lines.at(k);
-                if( k == lines.size()-1 )
-                    out<<"];\n";
-                else
-                    out<<"\n";
-            }
-        }
-        out << "x = 1:"<<problemSize<<";\n";
-        out << "y = 1:"<<problemSize<<";\n";
-        out << "[xx,yy] = meshgrid(x,y);\n";
-        out << "figure();\n";
-        for(int j = 1; j < coincidenceMatrix.size(); j++)
-        {
-            out<<"subplot(1,"<<coincidenceMatrix.size()-1<<","<<j<<");\n";
-            out<<"surf(xx,yy,"<<alphabets.at(j-1)<<");\n";
-            out<<"title('Model"<<j<<"');\n";
-        }
-        QString outputLog = outputName;
-        outputLog.append(" is created.");
-        ui->log_textEdit->append(outputLog);
-        output_file.close();
-    }
-    ui->log_textEdit->append("Process finished!");
+    disableButtons();
+    emit processCommand();
 }
 
 void MainWindow::on_clear_button_clicked()
 {
-    files.clear();
+    parser->clearList();
     ui->selected_textEdit->clear();
+}
+
+void MainWindow::progressResult_slot(const QString &status, const int &progress)
+{
+    ui->status_label->setText(status);
+    ui->selected_textEdit->append(status);
+    ui->progressBar->setValue(progress);
+}
+
+void MainWindow::processResult_slot(const QString &status, const int &progress)
+{
+    ui->status_label->setText(status);
+    ui->progressBar->setValue(progress);
+}
+
+void MainWindow::onFinished()
+{
+    ui->addr_button->setEnabled(true);
+    ui->process_button->setEnabled(true);
+    ui->clear_button->setEnabled(true);
+    ui->progressBar->setValue(100);
+}
+
+void MainWindow::disableButtons()
+{
+    ui->addr_button->setDisabled(true);
+    ui->process_button->setDisabled(true);
+    ui->clear_button->setDisabled(true);
 }
